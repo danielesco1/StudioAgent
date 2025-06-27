@@ -39,7 +39,8 @@ def run_sql_rag(input_string, db_path, table_descriptions_path="knowledge/table_
     # --- LLM says insufficient info ---
     if "No information" in sql_query:
         print("I'm sorry, but this database does not contain enough information to answer that question.")
-        exit()
+        # exit()
+        final_answer = "I'm sorry, but this database does not contain enough information to answer that question."
 
     # --- Execute SQL with a self-debbuging feature ---
     sql_query, query_result = fetch_sql(sql_query, db_context, user_question, db_path)
@@ -49,10 +50,12 @@ def run_sql_rag(input_string, db_path, table_descriptions_path="knowledge/table_
     if not query_result:
         print("SQL query failed or returned no data.")
         print("I'm sorry but I was not able to find any relevant information to answer your question. Please, try again.")
-        exit()
+        # exit()
+        final_answer= "I'm sorry but I was not able to find any relevant information to answer your question. Please, try again."
 
     # --- Build natural language answer to user ---
-    final_answer = build_answer(sql_query, query_result, user_question)
+    # final_answer = build_answer(sql_query, query_result, user_question)
     # print(f"Final Answer: \n {final_answer}")
+    final_answer = query_result 
 
     return final_answer

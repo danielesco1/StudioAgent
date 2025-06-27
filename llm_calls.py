@@ -93,41 +93,48 @@ def generate_sql_query(dB_context: str, retrieved_descriptions: str, user_questi
             {
                 "role": "system",
                 "content": f"""
-                    You are an SQL assistant for a building panels database. Generate accurate SQL queries for any question about building panels.
+                Generate SQL queries for building/panel data using exact schema names.
 
-                    ### DATABASE CONTEXT ###
-                    {dB_context}
-                    ### TABLE DESCRIPTIONS ###
-                    {retrieved_descriptions}
+                ### DATABASE ###
+                {dB_context}
+                {retrieved_descriptions}
 
-                    ### QUERY PATTERNS ###
-                    Count: SELECT COUNT(*) FROM building_panels WHERE...
-                    List items: SELECT column FROM building_panels WHERE...
-                    Unique values: SELECT DISTINCT column FROM building_panels WHERE...
-                    Group/aggregate: SELECT column, COUNT(*) FROM building_panels GROUP BY column
-                    Panel types: panel_id LIKE '%WINDOW%' (or %DOOR%, %WALL%, %FLOOR%, %ROOF%)
-                    
-                    # Instructions #
-                     ## Reasoning Steps: ##
-                     - Carefully analyze the users question.
-                     - Cross-reference the question with the provided database schema and table descriptions.
-                     - Think about which data a query to the database should fetch. Only data related to the question should be fetched.
-                     - Pay special atenttion to the names of the tables and properties of the schema. Your query must use keywords that match perfectly.
-                     - Create a valid and relevant SQL query, using only the table names and properties that are present in the schema.
+                ### QUERY EXAMPLES ###
+                "How many panels face south?" → SELECT COUNT(*) FROM building_sql WHERE panel_orientation = 'South'
+                "Average WWR by orientation" → SELECT panel_orientation, AVG(WWR) FROM building_sql GROUP BY panel_orientation
+                "Building summary" → SELECT COUNT(*), AVG(sda), AVG(WWR), AVG(radiation) FROM building_sql
+                "Show panels with low SDA" → SELECT unit_id, panel_name FROM building_sql WHERE sda < 30
+                "Panels in bedrooms" → SELECT unit_id, panel_name FROM building_sql WHERE connected_room LIKE '%bedroom%'
+                "Units with poor daylight" → SELECT DISTINCT unit_id FROM building_sql WHERE sda < 30
+                "Components used most" → SELECT component, COUNT(*) FROM building_sql GROUP BY component ORDER BY COUNT(*) DESC
+                "WWR for low SDA units" → SELECT unit_id, WWR FROM building_sql WHERE sda < 30
 
-                     ## Output Format: ##
-                     - Output only the SQL query.
-                     - Do not use formatting characters like '```sql' or other extra text.
-                     - If the database doesnt have enough information to answer the question, simply output "No information".
-                    """
+                ### RULES ###
+                - Panel queries: always return unit_id, panel_name
+                - Use LIKE '%pattern%' for text matching
+                - Thresholds: Low SDA < 30, High SDA > 50, High radiation > 1.0
+                - Output only SQL, no formatting or explanations
+                """
             },
             {
-                "role": "user",
+                "role": "user", 
                 "content": user_question,
             },
         ],
     )
-    return response.choices[0].message.content
+    
+    # Clean formatting
+    sql = response.choices[0].message.content.strip()
+    sql = sql.replace('```sql', '').replace('```', '')
+    
+    # Take only the first line that looks like SQL
+    lines = sql.split('\n')
+    for line in lines:
+        line = line.strip()
+        if line.upper().startswith('SELECT'):
+            return line.rstrip(';') + ';'
+    
+    return sql.split('\n')[0].strip()
 
 # Create a natural language response out of the SQL query and result
 def build_answer(sql_query: str, sql_result: str, user_question: str) -> str:
@@ -137,15 +144,21 @@ def build_answer(sql_query: str, sql_result: str, user_question: str) -> str:
             {
                 "role": "system",
                 "content": """
-                Interpret SQL query results and provide natural language answers. Extract actual data.
+                Extract structured data from SQL results for indexing purposes.
 
-                Examples:
-                - SQL Result: [('187',), ('291',), ('385',)] → Answer: "[187, 291, 385]"
-                - SQL Result: [(15,)] → Answer: "15 panels"
-                - SQL Result: [] → Answer: "No results found"
-                - SQL Result: [('187', 'bedroom', 'North')] → Answer: "Found: Unit 187 has a North-facing panel in bedroom"
-                - SQL Result: [(187, '3B_WINDOW9'), (173, '3B_WINDOW8'), (173, '3B_WINDOW13')] → Answer: "[(187, '3B_WINDOW9'), (173, '3B_WINDOW8'), (173, '3B_WINDOW13')]"
-                
+                **Panel queries (unit_id, panel_name):**
+                SQL Result: [(187, '3B_WINDOW9'), (173, '3B_WINDOW8')] → Return: [(187, '3B_WINDOW9'), (173, '3B_WINDOW8')]
+
+                **Unit queries:**
+                SQL Result: [('187',), ('291',), ('385',)] → Return: [187, 291, 385]
+
+                **Count queries:**
+                SQL Result: [(15,)] → Return: 15
+
+                **Empty results:**
+                SQL Result: [] → Return: []
+
+                Always return raw data structure, no descriptive text.
                 """
             },
             {
