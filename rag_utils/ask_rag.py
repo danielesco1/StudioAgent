@@ -1,6 +1,6 @@
 import json, numpy as np, argparse
 from openai import OpenAI
-from config import *
+from server.config import *
 
 def get_embedding(text, model=embedding_model):
     return local_client.embeddings.create(input=[text.replace("\n", " ")], model=model).data[0].embedding

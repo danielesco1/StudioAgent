@@ -10,43 +10,59 @@ from server.config import *
 import re 
 
 
-document_to_embed = "knowledge\\table_descriptions.txt"
+# document_to_embed = "knowledge\\table_descriptions.txt"
+
+
 
 def get_embedding(text, model=embedding_model):
    text = text.replace("\n", " ")
    return local_client.embeddings.create(input = [text], model=model).data[0].embedding
 
-# Read the text document
-with open(document_to_embed, 'r', encoding='utf-8', errors='ignore') as infile:
-    text_file = infile.read()
+def update_content_embeddings(json_file, model=embedding_model):
+    with open(json_file, 'r', encoding='utf-8') as infile:
+        data = json.load(infile)
 
-# A new strategy for chunking, parsing the txt file with regex
-pattern = r"Table:\s*(.*?)\s*Description:\s*(.*?)(?=Table:|\Z)"
-matches = re.findall(pattern, text_file, re.DOTALL)
+    for entry in data:
+        if 'content' in entry:
+            entry['vector'] = get_embedding(entry['content'], model)
 
-chunks = []
-for table_name, description in matches:
-    chunks.append({
-        "name": table_name.strip(),
-        "content": description.strip()
-    })
+    with open(json_file, 'w', encoding='utf-8') as outfile:
+        json.dump(data, outfile, indent=2, ensure_ascii=False)
         
-# Create the embeddings
-embeddings = []
-for i, chunk in enumerate(chunks):
-    print(f'{i + 1} / {len(chunks)}')
-    vector = get_embedding(chunk['content'])
-    embeddings.append({
-        'name': chunk['name'],
-        'content': chunk['content'],
-        'vector': vector
-    })
+    return data
 
-# Save the embeddings to a json file
-output_filename = os.path.splitext(document_to_embed)[0]
-output_path = f"{output_filename}.json"
 
-with open(output_path, 'w', encoding='utf-8') as outfile:
-    json.dump(embeddings, outfile, indent=2, ensure_ascii=False)
+# # Read the text document
+# with open(document_to_embed, 'r', encoding='utf-8', errors='ignore') as infile:
+#     text_file = infile.read()
 
-print(f"Finished vectorizing. Created {document_to_embed}")
+# # A new strategy for chunking, parsing the txt file with regex
+# pattern = r"Table:\s*(.*?)\s*Description:\s*(.*?)(?=Table:|\Z)"
+# matches = re.findall(pattern, text_file, re.DOTALL)
+
+# chunks = []
+# for table_name, description in matches:
+#     chunks.append({
+#         "name": table_name.strip(),
+#         "content": description.strip()
+#     })
+        
+# # Create the embeddings
+# embeddings = []
+# for i, chunk in enumerate(chunks):
+#     print(f'{i + 1} / {len(chunks)}')
+#     vector = get_embedding(chunk['content'])
+#     embeddings.append({
+#         'name': chunk['name'],
+#         'content': chunk['content'],
+#         'vector': vector
+#     })
+
+# # Save the embeddings to a json file
+# output_filename = os.path.splitext(document_to_embed)[0]
+# output_path = f"{output_filename}.json"
+
+# with open(output_path, 'w', encoding='utf-8') as outfile:
+#     json.dump(embeddings, outfile, indent=2, ensure_ascii=False)
+
+# print(f"Finished vectorizing. Created {document_to_embed}")
